@@ -1,26 +1,146 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---------------------------------------------------------------------------
+   Design tokens.
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+   Light is the primary theme — this app is used outdoors and in bright hotel
+   kitchens, where a dark UI is hard to read. Dark is supported for the
+   dashboard being read at night.
+--------------------------------------------------------------------------- */
+:root {
+  --background: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #f1f3ef;
+  --border: #dfe3da;
+  --border-strong: #c3cab8;
+
+  --foreground: #1a201a;
+  --muted: #5d6b5d;
+  --faint: #8b978b;
+
+  --brand: #2f7a3e;
+  --brand-hover: #276633;
+  --brand-fg: #ffffff;
+  --brand-soft: #e6f2e6;
+
+  --danger: #b4342c;
+  --danger-soft: #fbeae8;
+  --warning: #a86a12;
+  --success: #2f7a3e;
+
+  /* Chart ramp — single-hue ordinal green, least → most.
+     Validated with the dataviz palette script against #ffffff:
+     monotone lightness, all adjacent ΔL ≥ 0.06, light end 2.34:1, hue spread 7°.
+     Every chart in this app is single-series, so no categorical (and therefore
+     no red/green colour-vision) pairing exists anywhere. */
+  --chart-1: #7cb693;
+  --chart-2: #59a077;
+  --chart-3: #3d8a5c;
+  --chart-4: #2a7343;
+  --chart-5: #1b5c2f;
+  --chart-fill: #2a7343;
+  --chart-grid: #e4e8de;
+  --chart-axis: #c3cab8;
+
+  --radius: 0.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #12150f;
+    --surface: #1a1e17;
+    --surface-2: #222719;
+    --border: #333a2c;
+    --border-strong: #4a5340;
+
+    --foreground: #e8ebe4;
+    --muted: #a3ad9c;
+    --faint: #7b8474;
+
+    --brand: #5fb36f;
+    --brand-hover: #74c383;
+    --brand-fg: #0f1410;
+    --brand-soft: #22301f;
+
+    --danger: #e8837a;
+    --danger-soft: #35201e;
+    --warning: #d6a44e;
+    --success: #5fb36f;
+
+    /* Same ramp re-stepped for the dark surface (#1a1e17), not an automatic
+       flip: monotone, all gaps ≥ 0.06, dark end 2.20:1, hue spread 1°. */
+    --chart-1: #2b5d39;
+    --chart-2: #37764a;
+    --chart-3: #45905c;
+    --chart-4: #55a96e;
+    --chart-5: #6cbd83;
+    --chart-fill: #55a96e;
+    --chart-grid: #2b3126;
+    --chart-axis: #4a5340;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-fill: var(--chart-fill);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-card: var(--radius);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Stops iOS Safari zooming the page when an input is focused. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Visible focus for keyboard users on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* The survey is filled one-handed while standing: never shrink tap targets. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
