@@ -102,8 +102,7 @@ function LeadRow({ lead }: { lead: ResponseWithHotel }) {
             {lead.hotel.name}
           </Link>
           <p className="text-[13px] text-muted">
-            {lead.hotel.locality ?? "Area not recorded"}
-            {lead.hotel.contact_person ? ` · ${lead.hotel.contact_person}` : ""}
+            {lead.hotel.contact_person ?? "No contact recorded"}
             {lead.hotel.contact_role
               ? ` (${optionLabel(QUESTION_BY_ID.get("contact_role")!, lead.hotel.contact_role)})`
               : ""}

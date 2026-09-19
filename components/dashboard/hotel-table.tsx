@@ -13,11 +13,11 @@ type SortKey = "recent" | "interest" | "volume" | "name";
 
 export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
   const [query, setQuery] = useState("");
-  const [locality, setLocality] = useState("all");
+  const [kind, setKind] = useState("all");
   const [sort, setSort] = useState<SortKey>("recent");
 
-  const localities = useMemo(() => {
-    const set = new Set(responses.map((r) => r.hotel.locality?.trim()).filter(Boolean) as string[]);
+  const kinds = useMemo(() => {
+    const set = new Set(responses.map((r) => r.hotel.hotel_type).filter(Boolean) as string[]);
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [responses]);
 
@@ -25,14 +25,9 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
     const needle = query.trim().toLowerCase();
 
     const filtered = responses.filter((response) => {
-      if (locality !== "all" && response.hotel.locality?.trim() !== locality) return false;
+      if (kind !== "all" && response.hotel.hotel_type !== kind) return false;
       if (!needle) return true;
-      return [
-        response.hotel.name,
-        response.hotel.locality,
-        response.hotel.contact_person,
-        response.hotel.phone,
-      ]
+      return [response.hotel.name, response.hotel.contact_person, response.hotel.phone]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(needle));
     });
@@ -50,7 +45,7 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
           return b.created_at.localeCompare(a.created_at);
       }
     });
-  }, [responses, query, locality, sort]);
+  }, [responses, query, kind, sort]);
 
   function downloadCsv() {
     const csv = responsesToCsv(rows);
@@ -70,22 +65,22 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"
-          placeholder="Search hotel, area, contact or phone"
+          placeholder="Search hotel, contact or phone"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="min-w-52 flex-1"
           aria-label="Search hotels"
         />
         <select
-          value={locality}
-          onChange={(e) => setLocality(e.target.value)}
-          aria-label="Filter by area"
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          aria-label="Filter by kitchen type"
           className="min-h-12 rounded-xl border border-border-strong bg-surface px-3 text-[15px]"
         >
-          <option value="all">All areas</option>
-          {localities.map((item) => (
+          <option value="all">All kitchen types</option>
+          {kinds.map((item) => (
             <option key={item} value={item}>
-              {item}
+              {labelOf("hotel_type", item)}
             </option>
           ))}
         </select>
@@ -112,7 +107,7 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
       {rows.length === 0 ? (
         <EmptyState
           title="Nothing matches"
-          body="Try a different area or clear the search box."
+          body="Try a different kitchen type or clear the search box."
         />
       ) : (
         <>
@@ -128,7 +123,6 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
               <thead className="border-b border-border text-[13px] text-muted">
                 <tr>
                   <th scope="col" className="px-4 py-3 font-medium">Hotel</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Area</th>
                   <th scope="col" className="px-4 py-3 font-medium">Contact</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">kg/day</th>
                   <th scope="col" className="px-4 py-3 font-medium">Would buy</th>
@@ -152,7 +146,6 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-muted">{response.hotel.locality ?? "—"}</td>
                     <td className="px-4 py-3">
                       <p>{response.hotel.contact_person ?? "—"}</p>
                       <ContactLinks response={response} />
@@ -194,8 +187,10 @@ function HotelCard({ response }: { response: ResponseWithHotel }) {
             {response.hotel.name}
           </Link>
           <p className="text-[13px] text-muted">
-            {response.hotel.locality ?? "Area not recorded"}
-            {response.hotel.contact_person ? ` · ${response.hotel.contact_person}` : ""}
+            {response.hotel.contact_person ??
+              (response.hotel.hotel_type
+                ? labelOf("hotel_type", response.hotel.hotel_type)
+                : "No contact recorded")}
           </p>
         </div>
         <BuyBadge response={response} />
@@ -252,7 +247,12 @@ function BuyBadge({ response }: { response: ResponseWithHotel }) {
   const value = response.answers[KEY_QUESTIONS.wouldBuyPrecut];
   if (typeof value !== "string") return <span className="text-faint">—</span>;
 
-  const tone = value === "yes" ? "brand" : value === "maybe" ? "warning" : "neutral";
+  const tone =
+    value === "definitely" || value === "probably"
+      ? "brand"
+      : value === "maybe"
+        ? "warning"
+        : "neutral";
   return (
     <Badge tone={tone}>{labelOf(KEY_QUESTIONS.wouldBuyPrecut, value)}</Badge>
   );

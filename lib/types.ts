@@ -5,10 +5,8 @@ export type Hotel = {
   id: string;
   name: string;
   hotel_type: string | null;
-  locality: string | null;
-  address: string | null;
-  city: string | null;
-  pincode: string | null;
+  branches: number | null;
+  /** Captured with one tap on the survey form; the survey asks no address. */
   latitude: number | null;
   longitude: number | null;
   contact_person: string | null;
@@ -16,8 +14,6 @@ export type Hotel = {
   phone: string | null;
   whatsapp: string | null;
   email: string | null;
-  seating_capacity: number | null;
-  meals_per_day: number | null;
   created_at: string;
   updated_at: string;
 };

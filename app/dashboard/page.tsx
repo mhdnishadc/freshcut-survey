@@ -3,14 +3,15 @@ import Link from "next/link";
 import { BarList, ChartCard, SplitBar, Stat } from "@/components/dashboard/charts";
 import { TrendChart } from "@/components/dashboard/trend";
 import { Card, EmptyState } from "@/components/ui";
+import { VegetableTable } from "@/components/dashboard/vegetable-table";
 import {
-  byLocality,
   distribution,
   frequency,
   kpis,
   numberStats,
   overTime,
-  volumeByLocality,
+  vegetableDemand,
+  volumeByVegetable,
 } from "@/lib/analytics/aggregate";
 import { getResponses } from "@/lib/data";
 import { num, percent, rupeesShort } from "@/lib/format";
@@ -36,6 +37,7 @@ export default async function DashboardPage() {
   const k = kpis(responses);
   const hours = numberStats(responses, KEY_QUESTIONS.prepHoursPerDay);
   const wastage = numberStats(responses, KEY_QUESTIONS.wastagePercent);
+  const demand = vegetableDemand(responses);
 
   return (
     <div className="space-y-6">
@@ -100,11 +102,11 @@ export default async function DashboardPage() {
         </ChartCard>
 
         <ChartCard
-          title="Vegetables most in demand"
-          hint="Share of kitchens that buy each one in bulk — this is our starting SKU list."
+          title="Which vegetables they want pre-cut"
+          hint="Share of kitchens asking for each one — this is our starting SKU list."
         >
           <BarList
-            items={frequency(responses, KEY_QUESTIONS.topVegetables)}
+            items={frequency(responses, KEY_QUESTIONS.precutWanted)}
             limit={10}
             format={(item) => `${Math.round(item.share)}%`}
           />
@@ -139,24 +141,24 @@ export default async function DashboardPage() {
         </ChartCard>
 
         <ChartCard
-          title="Daily volume by area"
-          hint="Kilograms per day per locality — the densest area is the first delivery route."
-          footnote="A route only pays for itself above roughly 150 kg a day."
+          title="Daily volume by vegetable"
+          hint="Kilograms a day across every kitchen surveyed — build the cutting line in this order."
         >
           <BarList
-            items={volumeByLocality(responses)}
-            limit={8}
+            items={volumeByVegetable(responses)}
+            limit={10}
             format={(item) => `${num(item.count)} kg`}
           />
         </ChartCard>
-
-        <ChartCard
-          title="Hotels covered by area"
-          hint="Where the survey has been and where it still has gaps."
-        >
-          <BarList items={byLocality(responses)} limit={8} />
-        </ChartCard>
       </section>
+
+      <ChartCard
+        title="The order book, vegetable by vegetable"
+        hint="What they get through, what they pay now, and what they say they would pay pre-cut."
+        footnote="Prices are medians. The premium column is what our margin has to fit inside."
+      >
+        <VegetableTable rows={demand} />
+      </ChartCard>
 
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">

@@ -2,7 +2,10 @@ import {
   ANSWER_QUESTIONS,
   KEY_QUESTIONS,
   QUESTION_BY_ID,
+  asTableValue,
   optionLabel,
+  tableRowLabel,
+  type AnswerValue,
   type Question,
 } from "@/lib/survey/questions";
 import type { ResponseWithHotel } from "@/lib/types";
@@ -173,11 +176,14 @@ export function kpis(responses: ResponseWithHotel[]): Kpis {
     hotels: new Set(responses.map((r) => r.hotel_id)).size,
     interviews: responses.length,
     interviewsThisWeek: responses.filter((r) => new Date(r.created_at).getTime() >= weekAgo).length,
-    dailyVolumeKg: total(responses, KEY_QUESTIONS.vegKgPerDay),
+    // Read off the promoted column rather than the JSON, so it stays correct
+    // even for interviews saved before the table question existed.
+    dailyVolumeKg: responses.reduce((acc, r) => acc + (r.veg_kg_per_day ?? 0), 0),
     monthlyVegSpend: total(responses, KEY_QUESTIONS.monthlyVegSpend),
     monthlyLabourCost: total(responses, KEY_QUESTIONS.monthlyPrepLabourCost),
-    yesShare: share(buy, (v) => v === "yes"),
-    warmShare: share(buy, (v) => v === "yes" || v === "maybe"),
+    // "Warm" now spans the four-point scale the printed form used.
+    yesShare: share(buy, (v) => v === "definitely"),
+    warmShare: share(buy, (v) => v === "definitely" || v === "probably" || v === "maybe"),
     trialShare: share(trial, (v) => v === "yes"),
     hotHotels: interest.filter((v) => v >= 4).length,
     avgInterest: interest.length ? interest.reduce((a, b) => a + b, 0) / interest.length : null,
@@ -190,48 +196,114 @@ function share(values: string[], predicate: (v: string) => boolean): number {
 }
 
 // ---------------------------------------------------------------------------
-// cuts by hotel attributes
+// the vegetable table
 // ---------------------------------------------------------------------------
 
-/** Interviews per locality, biggest first — where the delivery route starts. */
-export function byLocality(responses: ResponseWithHotel[]): Slice[] {
-  const counts = new Map<string, number>();
-  for (const response of responses) {
-    const key = response.hotel.locality?.trim() || "Not recorded";
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  const totalCount = responses.length;
-  return [...counts.entries()]
-    .map(([value, count]) => ({
-      value,
-      label: value,
-      count,
-      share: totalCount === 0 ? 0 : (count / totalCount) * 100,
-    }))
-    .sort((a, b) => b.count - a.count);
+/** Every number in one column of one table answer, added up. */
+export function tableColumnTotal(value: AnswerValue | undefined, columnId: string): number | null {
+  const cells = Object.values(asTableValue(value).cells);
+  const numbers = cells
+    .map((row) => row[columnId])
+    .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  return numbers.length === 0 ? null : numbers.reduce((a, b) => a + b, 0);
 }
 
-/** Daily kg demand grouped by locality — how much a single route would carry. */
-export function volumeByLocality(responses: ResponseWithHotel[]): Slice[] {
-  const sums = new Map<string, number>();
+export type VegetableDemand = {
+  key: string;
+  label: string;
+  /** How many kitchens reported using this vegetable at all. */
+  kitchens: number;
+  /** Combined kilograms per day across those kitchens — the order book. */
+  kgPerDay: number;
+  /** Median of what they pay for it raw today. */
+  priceNow: number | null;
+  /** Median of what they say they would pay for it pre-cut. */
+  pricePrecut: number | null;
+  /** The gap between the two, as a percentage of the raw price. */
+  premiumPercent: number | null;
+};
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/**
+ * The single most valuable output of this survey: for each vegetable, how much
+ * of it the surveyed kitchens get through, what they pay now, and what they say
+ * they would pay pre-cut. Ordered by daily volume, because that is the order in
+ * which the processing line should be built.
+ */
+export function vegetableDemand(
+  responses: ResponseWithHotel[],
+  questionId: string = KEY_QUESTIONS.vegTable,
+): VegetableDemand[] {
+  const question = QUESTION_BY_ID.get(questionId);
+  if (!question) return [];
+
+  const rows = new Map<
+    string,
+    { label: string; kitchens: number; kg: number; now: number[]; precut: number[] }
+  >();
+
   for (const response of responses) {
-    const kg = response.answers[KEY_QUESTIONS.vegKgPerDay];
-    if (typeof kg !== "number" || !Number.isFinite(kg)) continue;
-    const key = response.hotel.locality?.trim() || "Not recorded";
-    sums.set(key, (sums.get(key) ?? 0) + kg);
+    const table = asTableValue(response.answers[questionId]);
+    for (const [rowKey, cells] of Object.entries(table.cells)) {
+      const entry = rows.get(rowKey) ?? {
+        label: tableRowLabel(question, table, rowKey),
+        kitchens: 0,
+        kg: 0,
+        now: [],
+        precut: [],
+      };
+
+      entry.kitchens += 1;
+      if (typeof cells.kg_day === "number") entry.kg += cells.kg_day;
+      if (typeof cells.price_now === "number") entry.now.push(cells.price_now);
+      if (typeof cells.price_precut === "number") entry.precut.push(cells.price_precut);
+
+      rows.set(rowKey, entry);
+    }
   }
 
-  const grand = [...sums.values()].reduce((a, b) => a + b, 0);
-  return [...sums.entries()]
-    .map(([value, count]) => ({
-      value,
-      label: value,
-      count,
-      share: grand === 0 ? 0 : (count / grand) * 100,
-    }))
-    .sort((a, b) => b.count - a.count);
+  return [...rows.entries()]
+    .map(([key, entry]) => {
+      const priceNow = median(entry.now);
+      const pricePrecut = median(entry.precut);
+      return {
+        key,
+        label: entry.label,
+        kitchens: entry.kitchens,
+        kgPerDay: entry.kg,
+        priceNow,
+        pricePrecut,
+        premiumPercent:
+          priceNow && pricePrecut && priceNow > 0
+            ? ((pricePrecut - priceNow) / priceNow) * 100
+            : null,
+      };
+    })
+    .sort((a, b) => b.kgPerDay - a.kgPerDay || b.kitchens - a.kitchens);
 }
+
+/** Vegetable demand shaped for `BarList` — kilograms per day, biggest first. */
+export function volumeByVegetable(responses: ResponseWithHotel[]): Slice[] {
+  const demand = vegetableDemand(responses).filter((d) => d.kgPerDay > 0);
+  const grand = demand.reduce((acc, d) => acc + d.kgPerDay, 0);
+
+  return demand.map((d) => ({
+    value: d.key,
+    label: d.label,
+    count: d.kgPerDay,
+    share: grand === 0 ? 0 : (d.kgPerDay / grand) * 100,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// over time
+// ---------------------------------------------------------------------------
 
 /** Interviews per day, oldest first — is the survey effort keeping pace? */
 export function overTime(responses: ResponseWithHotel[]): { date: string; count: number }[] {
@@ -253,6 +325,7 @@ export type QuestionSummary =
   | { question: Question; kind: "slices"; slices: Slice[] }
   | { question: Question; kind: "stats"; stats: NumberStats }
   | { question: Question; kind: "text"; samples: { hotel: string; text: string }[] }
+  | { question: Question; kind: "table"; rows: VegetableDemand[] }
   | { question: Question; kind: "empty" };
 
 /**
@@ -283,6 +356,13 @@ export function summariseAll(responses: ResponseWithHotel[]): QuestionSummary[] 
         const slices = distribution(responses, question.id);
         return slices.some((s) => s.count > 0)
           ? { question, kind: "slices" as const, slices }
+          : { question, kind: "empty" as const };
+      }
+
+      case "table": {
+        const rows = vegetableDemand(responses, question.id);
+        return rows.length
+          ? { question, kind: "table" as const, rows }
           : { question, kind: "empty" as const };
       }
 

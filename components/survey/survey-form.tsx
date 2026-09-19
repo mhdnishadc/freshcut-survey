@@ -7,8 +7,12 @@ import { Badge, Button, Card, ErrorNote, cx } from "@/components/ui";
 import { submitSurvey } from "@/app/survey/actions";
 import {
   SECTIONS,
+  asTableValue,
+  isTableValue,
   isVisible,
   optionLabel,
+  tableHasContent,
+  tableRowLabel,
   type AnswerValue,
 } from "@/lib/survey/questions";
 import { collectErrors, emptyValues, pruneHidden, type SurveyValues } from "@/lib/survey/schema";
@@ -87,11 +91,17 @@ export function SurveyForm({ interviewer }: { interviewer: string }) {
 
   // -- navigation ----------------------------------------------------------
 
+  /**
+   * Moving on never blocks on a blank answer — only on an answer that is
+   * actually wrong (a 6-digit phone number, 4000 kg of garlic). A half-finished
+   * interview saved is worth more to us than a complete one abandoned, so the
+   * only thing that can ever stop this form is a value we could not store.
+   */
   function goNext() {
     const sectionErrors = collectErrors(values, section.questions);
     if (Object.keys(sectionErrors).length > 0) {
       setErrors(sectionErrors);
-      setFormError("Check the highlighted answers before moving on.");
+      setFormError("Fix the highlighted answers — the rest can stay blank.");
       scrollToTop();
       return;
     }
@@ -153,7 +163,7 @@ export function SurveyForm({ interviewer }: { interviewer: string }) {
       const firstBad = SECTIONS.findIndex((s) => s.questions.some((q) => q.id in allErrors));
       setStage("form");
       setSectionIndex(Math.max(0, firstBad));
-      setFormError("Some answers are missing. They are highlighted below.");
+      setFormError("One answer cannot be saved as it stands. It is highlighted below.");
       scrollToTop();
       return;
     }
@@ -418,8 +428,16 @@ function ReviewStage({
         ) : null}
       </Card>
 
+      {/*
+        Only answered questions are listed. With everything but the hotel name
+        optional, a full listing would be mostly em-dashes, and the interviewer
+        would have to hunt for what they actually recorded.
+      */}
       {SECTIONS.map((section, index) => {
-        const answered = section.questions.filter((q) => isVisible(q, values));
+        const visible = section.questions.filter((q) => isVisible(q, values));
+        const answered = visible.filter((q) => hasAnswer(values[q.id]));
+        const skipped = visible.length - answered.length;
+
         return (
           <Card key={section.id}>
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -428,16 +446,25 @@ function ReviewStage({
                 Edit
               </Button>
             </div>
-            <dl className="space-y-2.5">
-              {answered.map((question) => (
-                <div key={question.id} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
-                  <dt className="text-[13px] text-muted">{question.label}</dt>
-                  <dd className="text-right text-[13px] font-medium">
-                    {renderAnswer(values[question.id], question)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+
+            {answered.length === 0 ? (
+              <p className="text-[13px] text-faint">Nothing recorded — that is fine.</p>
+            ) : (
+              <dl className="space-y-2.5">
+                {answered.map((question) => (
+                  <div key={question.id} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
+                    <dt className="text-[13px] text-muted">{question.label}</dt>
+                    <dd className="text-right text-[13px] font-medium">
+                      {renderAnswer(values[question.id], question)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {skipped > 0 && answered.length > 0 ? (
+              <p className="mt-2.5 text-[12px] text-faint">{skipped} left blank</p>
+            ) : null}
           </Card>
         );
       })}
@@ -445,12 +472,39 @@ function ReviewStage({
   );
 }
 
+function hasAnswer(value: AnswerValue | undefined): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return tableHasContent(value);
+  return Number.isFinite(value);
+}
+
 function renderAnswer(
   value: AnswerValue | undefined,
   question: (typeof SECTIONS)[number]["questions"][number],
 ) {
-  if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
-    return <span className="text-faint">—</span>;
+  if (!hasAnswer(value)) return <span className="text-faint">—</span>;
+
+  if (isTableValue(value)) {
+    const table = asTableValue(value);
+    const columns = question.columns ?? [];
+    return (
+      <span className="flex flex-col items-end gap-0.5">
+        {Object.entries(table.cells).map(([rowKey, cells]) => (
+          <span key={rowKey} className="tabular-nums">
+            {tableRowLabel(question, table, rowKey)}
+            {": "}
+            <span className="text-muted">
+              {columns
+                .filter((c) => typeof cells[c.id] === "number")
+                .map((c) => `${cells[c.id]} ${c.label}`)
+                .join(" · ")}
+            </span>
+          </span>
+        ))}
+      </span>
+    );
   }
 
   if (Array.isArray(value)) {
@@ -473,6 +527,9 @@ function renderAnswer(
       </>
     );
   }
+
+  // Everything else has been handled above, so only text remains.
+  if (typeof value !== "string") return <span className="text-faint">—</span>;
 
   if (question.type === "yes_no") return value === "yes" ? "Yes" : "No";
   if (question.options) return optionLabel(question, value);

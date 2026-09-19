@@ -6,9 +6,13 @@ import { getHotel } from "@/lib/data";
 import { num, shortDate, telHref, whatsappHref } from "@/lib/format";
 import {
   HOTEL_FIELD_BY_QUESTION_ID,
+  QUESTION_BY_ID,
   SECTIONS,
+  asTableValue,
+  isTableValue,
   isVisible,
   optionLabel,
+  tableRowLabel,
   type AnswerValue,
   type Question,
 } from "@/lib/survey/questions";
@@ -34,7 +38,9 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
         </Link>
         <h1 className="mt-1 text-xl font-semibold tracking-tight">{hotel.name}</h1>
         <p className="mt-1 text-sm text-muted">
-          {[hotel.locality, hotel.city].filter(Boolean).join(", ") || "Area not recorded"}
+          {hotel.hotel_type
+            ? optionLabel(QUESTION_BY_ID.get("hotel_type")!, hotel.hotel_type)
+            : "Kitchen type not recorded"}
           {responses.length > 1 ? ` · ${responses.length} interviews` : ""}
         </p>
       </div>
@@ -46,10 +52,7 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
           <Field label="Role" value={hotel.contact_role} />
           <Field label="Phone" value={hotel.phone} />
           <Field label="WhatsApp" value={hotel.whatsapp} />
-          <Field label="Seats" value={hotel.seating_capacity} />
-          <Field label="Meals per day" value={hotel.meals_per_day} />
-          <Field label="Address" value={hotel.address} />
-          <Field label="Pincode" value={hotel.pincode} />
+          <Field label="Branches" value={hotel.branches} />
         </dl>
 
         {(tel || wa || (hotel.latitude && hotel.longitude)) && (
@@ -164,6 +167,28 @@ function Field({ label, value }: { label: string; value: string | number | null 
 function Answer({ question, value }: { question: Question; value: AnswerValue | undefined }) {
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return <span className="text-faint">Not answered</span>;
+  }
+
+  if (isTableValue(value)) {
+    const table = asTableValue(value);
+    const entries = Object.entries(table.cells);
+    if (entries.length === 0) return <span className="text-faint">Not answered</span>;
+
+    return (
+      <ul className="space-y-1">
+        {entries.map(([rowKey, cells]) => (
+          <li key={rowKey} className="flex flex-wrap justify-between gap-x-3 tabular-nums">
+            <span className="font-medium">{tableRowLabel(question, table, rowKey)}</span>
+            <span className="text-muted">
+              {(question.columns ?? [])
+                .filter((c) => typeof cells[c.id] === "number")
+                .map((c) => `${cells[c.id]} ${c.label}`)
+                .join(" · ")}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
   }
 
   if (Array.isArray(value)) {

@@ -3,6 +3,8 @@
 import { Input, Textarea, cx } from "@/components/ui";
 import type { AnswerValue, Question } from "@/lib/survey/questions";
 
+import { TableField } from "./table-field";
+
 type Props = {
   question: Question;
   value: AnswerValue | undefined;
@@ -24,15 +26,25 @@ export function QuestionField({ question, value, error, onChange }: Props) {
     .filter(Boolean)
     .join(" ");
 
+  const caption = (
+    <>
+      {question.label}
+      {question.required ? <span className="ml-1 text-danger">*</span> : null}
+    </>
+  );
+  const captionClass = "block text-[15px] leading-snug font-medium text-foreground";
+
   return (
     <div className="py-4 first:pt-0">
-      <label
-        htmlFor={question.id}
-        className="block text-[15px] leading-snug font-medium text-foreground"
-      >
-        {question.label}
-        {question.required ? <span className="ml-1 text-danger">*</span> : null}
-      </label>
+      {/* A table is a group of inputs, not one control, so its caption must not
+          be a <label> pointing at an id that no single input owns. */}
+      {question.type === "table" ? (
+        <p className={captionClass}>{caption}</p>
+      ) : (
+        <label htmlFor={question.id} className={captionClass}>
+          {caption}
+        </label>
+      )}
 
       {question.help ? (
         <p id={`${question.id}-help`} className="mt-1 text-[13px] leading-snug text-muted">
@@ -76,7 +88,7 @@ function Control({
           invalid={invalid}
           aria-describedby={describedBy}
           aria-invalid={invalid}
-          inputMode={question.format === "phone" || question.format === "pincode" ? "numeric" : "text"}
+          inputMode={question.format === "phone" ? "numeric" : "text"}
           placeholder={question.placeholder}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
@@ -150,6 +162,9 @@ function Control({
           describedBy={describedBy}
         />
       );
+
+    case "table":
+      return <TableField question={question} value={value} onChange={onChange} />;
   }
 }
 

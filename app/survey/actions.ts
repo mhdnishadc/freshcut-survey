@@ -5,8 +5,11 @@ import {
   KEY_QUESTIONS,
   QUESTIONNAIRE_VERSION,
   QUESTION_BY_ID,
+  compactTable,
+  isTableValue,
   type AnswerValue,
 } from "@/lib/survey/questions";
+import { tableColumnTotal } from "@/lib/analytics/aggregate";
 import { normalisePhone, pruneHidden, surveySchema, type SurveyValues } from "@/lib/survey/schema";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,8 +27,14 @@ type HotelRow = Record<string, string | number | null>;
 /** Postgres unique-violation — two interviewers saved the same hotel at once. */
 const UNIQUE_VIOLATION = "23505";
 
-function dedupeKey(name: string, locality: string | null): string {
-  return `${name.trim().toLowerCase()}|${(locality ?? "").trim().toLowerCase()}`;
+/**
+ * Hotels are matched on name alone, mirroring the generated `dedupe_key` column
+ * in the database. The survey no longer records an area, so two genuinely
+ * different kitchens sharing a name will merge into one record — the trade for
+ * a form a chef will actually finish.
+ */
+function dedupeKey(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 /**
@@ -45,11 +54,17 @@ function split(values: SurveyValues): { hotel: HotelRow; answers: Record<string,
     if (typeof value === "string") {
       const trimmed = value.trim();
       value = trimmed === "" ? null : question.format === "phone" ? normalisePhone(trimmed) : trimmed;
+    } else if (isTableValue(value)) {
+      // Blank cells and rows the interviewer opened but never filled are
+      // dropped here, so a skipped table stores `{}` rather than twelve nulls.
+      value = compactTable(value);
     }
 
     const column = HOTEL_FIELD_BY_QUESTION_ID[questionId];
     if (column) {
-      // Hotel columns are scalar; a multi-select could never map to one.
+      // Hotel columns are scalar. A multi-select flattens to a list; a table
+      // has no scalar form at all and is never mapped to one.
+      if (isTableValue(value)) continue;
       hotel[column] = Array.isArray(value) ? value.join(", ") : value;
     } else {
       answers[questionId] = value;
@@ -90,9 +105,9 @@ export async function submitSurvey(payload: SubmitPayload): Promise<SubmitResult
 
   const { hotel, answers } = split(cleaned);
   const name = typeof hotel.name === "string" ? hotel.name : null;
+  // The one thing the form will not let through blank, because a hotel row
+  // cannot exist without it.
   if (!name) return { ok: false, error: "Hotel name is required." };
-
-  const locality = typeof hotel.locality === "string" ? hotel.locality : null;
 
   if (payload.coords) {
     hotel.latitude = payload.coords.latitude;
@@ -101,7 +116,7 @@ export async function submitSurvey(payload: SubmitPayload): Promise<SubmitResult
 
   // Re-visiting a hotel updates the existing row rather than creating a second
   // one, so contact details stay in one place across repeat interviews.
-  const key = dedupeKey(name, locality);
+  const key = dedupeKey(name);
   const { data: existing } = await supabase
     .from("hotels")
     .select("id")
@@ -111,9 +126,15 @@ export async function submitSurvey(payload: SubmitPayload): Promise<SubmitResult
   let hotelId: string;
 
   if (existing) {
+    // Only write what this interview actually recorded. Every field but the
+    // name is optional, so patching in the nulls would let a rushed second
+    // visit wipe the phone number the first visit worked to get.
+    const patch = Object.fromEntries(
+      Object.entries(hotel).filter(([, value]) => value !== null),
+    );
     const { data, error } = await supabase
       .from("hotels")
-      .update(hotel)
+      .update(patch)
       .eq("id", existing.id)
       .select("id")
       .single();
@@ -142,11 +163,16 @@ export async function submitSurvey(payload: SubmitPayload): Promise<SubmitResult
     }
   }
 
+  // Daily volume is no longer asked as its own question — it is the kg/day
+  // column of the vegetable table added up. Promoting it to a real column keeps
+  // the leads list sortable in SQL.
+  const kgPerDay = tableColumnTotal(answers[KEY_QUESTIONS.vegTable], "kg_day");
+
   const { error: responseError } = await supabase.from("survey_responses").insert({
     hotel_id: hotelId,
     answers,
     interest_level: asNumber(answers[KEY_QUESTIONS.interestLevel]),
-    veg_kg_per_day: asNumber(answers[KEY_QUESTIONS.vegKgPerDay]),
+    veg_kg_per_day: kgPerDay,
     notes: typeof answers.notes === "string" ? answers.notes : null,
     questionnaire_version: QUESTIONNAIRE_VERSION,
     submitted_by: user.id,
