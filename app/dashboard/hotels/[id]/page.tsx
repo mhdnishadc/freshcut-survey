@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Badge, Card, CardTitle } from "@/components/ui";
+import { Badge, Card, CardTitle, LinkButton } from "@/components/ui";
 import { getHotel } from "@/lib/data";
 import { num, shortDate, telHref, whatsappHref } from "@/lib/format";
 import {
@@ -33,10 +32,10 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
   return (
     <div className="space-y-5">
       <div>
-        <Link href="/dashboard/hotels" className="text-[13px] text-muted hover:text-foreground">
-          ← All hotels
-        </Link>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">{hotel.name}</h1>
+        <LinkButton href="/dashboard/hotels" variant="secondary" size="sm">
+          ← All collected hotels
+        </LinkButton>
+        <h1 className="mt-3 text-xl font-semibold tracking-tight">{hotel.name}</h1>
         <p className="mt-1 text-sm text-muted">
           {hotel.hotel_type
             ? optionLabel(QUESTION_BY_ID.get("hotel_type")!, hotel.hotel_type)

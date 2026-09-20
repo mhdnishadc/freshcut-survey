@@ -7,7 +7,9 @@ import { cx } from "@/components/ui";
 
 const TABS = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/hotels", label: "Hotels" },
+  // "Collected hotels", not "Hotels" — it matches the button the field team
+  // taps to get here, so the label never changes under them mid-journey.
+  { href: "/dashboard/hotels", label: "Collected hotels" },
   { href: "/dashboard/leads", label: "Leads" },
 ] as const;
 

@@ -1,4 +1,5 @@
-import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import Link from "next/link";
+import type { ComponentProps, ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -6,45 +7,58 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
 
 // ---------------------------------------------------------------------------
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  size?: "md" | "lg";
-  full?: boolean;
-};
+type Variant = "primary" | "secondary" | "brand-soft" | "ghost" | "danger";
+type Size = "sm" | "md" | "lg";
+
+type Look = { variant?: Variant; size?: Size; full?: boolean };
+
+const BUTTON_BASE =
+  "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
+
+const BUTTON_VARIANTS = {
+  primary: "bg-brand text-brand-fg hover:bg-brand-hover",
+  secondary: "bg-surface text-foreground border border-border-strong hover:bg-surface-2",
+  // A button that reads as an action without competing with the primary one —
+  // used for "see what we collected" next to "save this interview".
+  "brand-soft": "bg-brand-soft text-brand border border-brand/30 hover:bg-brand hover:text-brand-fg",
+  ghost: "text-muted hover:bg-surface-2 hover:text-foreground",
+  danger: "bg-danger text-white hover:opacity-90",
+} as const;
+
+const BUTTON_SIZES = {
+  // sm is for buttons inside a dense desktop table row, never on the survey.
+  sm: "min-h-9 px-3 text-[13px]",
+  md: "min-h-12 px-4 text-[15px]",
+  lg: "min-h-14 px-6 text-base",
+} as const;
 
 /**
- * Minimum height is 48px on every variant — this is tapped with a thumb while
- * standing in a kitchen, not clicked with a mouse.
+ * Minimum height is 48px on every variant the field team touches — this is
+ * tapped with a thumb while standing in a kitchen, not clicked with a mouse.
  */
-export function Button({
-  variant = "primary",
-  size = "md",
-  full = false,
+export function buttonClass({ variant = "primary", size = "md", full = false }: Look = {}): string {
+  return cx(BUTTON_BASE, BUTTON_VARIANTS[variant], BUTTON_SIZES[size], full && "w-full");
+}
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & Look;
+
+export function Button({ variant, size, full, className, ...props }: ButtonProps) {
+  return <button className={cx(buttonClass({ variant, size, full }), className)} {...props} />;
+}
+
+/**
+ * A navigation that has to look like a button. Staff do not read tinted text as
+ * something they can tap, so anything we need them to find is shaped like this.
+ */
+export function LinkButton({
+  variant,
+  size,
+  full,
   className,
   ...props
-}: ButtonProps) {
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors " +
-    "disabled:cursor-not-allowed disabled:opacity-50";
-
-  const variants = {
-    primary: "bg-brand text-brand-fg hover:bg-brand-hover",
-    secondary: "bg-surface text-foreground border border-border-strong hover:bg-surface-2",
-    ghost: "text-muted hover:bg-surface-2 hover:text-foreground",
-    danger: "bg-danger text-white hover:opacity-90",
-  } as const;
-
-  const sizes = {
-    md: "min-h-12 px-4 text-[15px]",
-    lg: "min-h-14 px-6 text-base",
-  } as const;
-
-  return (
-    <button
-      className={cx(base, variants[variant], sizes[size], full && "w-full", className)}
-      {...props}
-    />
-  );
+}: ComponentProps<typeof Link> & Look) {
+  return <Link className={cx(buttonClass({ variant, size, full }), className)} {...props} />;
 }
 
 // ---------------------------------------------------------------------------

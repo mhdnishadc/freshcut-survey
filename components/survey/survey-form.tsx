@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { Badge, Button, Card, ErrorNote, cx } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, LinkButton, cx } from "@/components/ui";
 import { submitSurvey } from "@/app/survey/actions";
 import {
   SECTIONS,
@@ -253,11 +252,10 @@ export function SurveyForm({ interviewer }: { interviewer: string }) {
             <Button size="lg" full onClick={startNext}>
               Start next hotel
             </Button>
-            <Link href="/dashboard" className="block">
-              <Button variant="secondary" size="lg" full>
-                See the results
-              </Button>
-            </Link>
+            <LinkButton href="/dashboard/hotels" variant="secondary" size="lg" full>
+              <span aria-hidden>📋</span>
+              View collected hotels
+            </LinkButton>
           </div>
         </Card>
       </div>

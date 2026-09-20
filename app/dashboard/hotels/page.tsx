@@ -1,5 +1,5 @@
 import { HotelTable } from "@/components/dashboard/hotel-table";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, LinkButton } from "@/components/ui";
 import { getResponses } from "@/lib/data";
 
 export const metadata = { title: "Hotels · FreshCut Survey" };
@@ -10,11 +10,16 @@ export default async function HotelsPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Hotels surveyed</h1>
-        <p className="mt-1 text-sm text-muted">
-          Every interview, searchable and exportable. Tap a hotel to see all its answers.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Collected hotels</h1>
+          <p className="mt-1 text-sm text-muted">
+            Every interview your team has saved. Open one to read everything that was collected.
+          </p>
+        </div>
+        <LinkButton href="/survey" variant="secondary" className="shrink-0">
+          ← Back to survey
+        </LinkButton>
       </header>
 
       {responses.length === 0 ? (

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Badge, Button, Card, EmptyState, Input } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, LinkButton, buttonClass, cx } from "@/components/ui";
 import { responsesToCsv } from "@/lib/csv";
 import { num, relativeDate, telHref, whatsappHref } from "@/lib/format";
 import { KEY_QUESTIONS, optionLabel, QUESTION_BY_ID } from "@/lib/survey/questions";
@@ -95,13 +95,21 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
           <option value="volume">Biggest volume</option>
           <option value="name">Name A–Z</option>
         </select>
-        <Button variant="secondary" onClick={downloadCsv} disabled={rows.length === 0}>
-          Export CSV
+        {/* Full width on a phone, where it was previously squeezed to a stub. */}
+        <Button
+          variant="secondary"
+          onClick={downloadCsv}
+          disabled={rows.length === 0}
+          className="w-full sm:w-auto"
+        >
+          <span aria-hidden>⬇</span>
+          Export {rows.length === responses.length ? "all" : rows.length} to CSV
         </Button>
       </div>
 
       <p className="text-[13px] text-muted">
-        {rows.length} of {responses.length} interview{responses.length === 1 ? "" : "s"}
+        Showing {rows.length} of {responses.length} interview{responses.length === 1 ? "" : "s"} ·
+        tap a hotel to see everything that was collected
       </p>
 
       {rows.length === 0 ? (
@@ -128,6 +136,9 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
                   <th scope="col" className="px-4 py-3 font-medium">Would buy</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">Interest</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">Surveyed</th>
+                  <th scope="col" className="px-4 py-3 text-right font-medium">
+                    <span className="sr-only">Collected information</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -161,6 +172,17 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
                     </td>
                     <td className="px-4 py-3 text-right text-[13px] whitespace-nowrap text-muted">
                       {relativeDate(response.created_at)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <LinkButton
+                        href={`/dashboard/hotels/${response.hotel_id}`}
+                        variant="secondary"
+                        size="sm"
+                        className="whitespace-nowrap"
+                        aria-label={`View collected information for ${response.hotel.name}`}
+                      >
+                        View info
+                      </LinkButton>
                     </td>
                   </tr>
                 ))}
@@ -210,32 +232,53 @@ function HotelCard({ response }: { response: ResponseWithHotel }) {
         <span className="ml-auto text-faint">{relativeDate(response.created_at)}</span>
       </div>
 
-      <div className="mt-3">
-        <ContactLinks response={response} />
+      {/*
+        On a phone the hotel name alone was the only way in and nobody read it
+        as tappable, so the card ends in a labelled button that says what it
+        opens. Call and WhatsApp sit beside it as buttons too, not tinted words.
+      */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <LinkButton
+          href={`/dashboard/hotels/${response.hotel_id}`}
+          variant="brand-soft"
+          // min-w-40 makes it claim its own line on a narrow phone instead of
+          // shrinking to an unreadable stub beside Call and WhatsApp.
+          className="min-h-11 min-w-40 flex-1 text-sm"
+          aria-label={`View collected information for ${response.hotel.name}`}
+        >
+          View collected info
+        </LinkButton>
+        <ContactLinks response={response} as="button" />
       </div>
     </Card>
   );
 }
 
-function ContactLinks({ response }: { response: ResponseWithHotel }) {
+function ContactLinks({
+  response,
+  as = "text",
+}: {
+  response: ResponseWithHotel;
+  as?: "text" | "button";
+}) {
   const tel = telHref(response.hotel.phone);
   const wa = whatsappHref(response.hotel.whatsapp ?? response.hotel.phone);
   if (!tel && !wa) return null;
 
+  const linkClass =
+    as === "button"
+      ? cx(buttonClass({ variant: "secondary", size: "sm" }), "min-h-11 text-sm")
+      : "font-medium text-brand hover:underline";
+
   return (
-    <span className="flex gap-3 text-[13px]">
+    <span className={as === "button" ? "flex gap-2" : "flex gap-3 text-[13px]"}>
       {tel ? (
-        <a href={tel} className="font-medium text-brand hover:underline">
+        <a href={tel} className={linkClass}>
           Call
         </a>
       ) : null}
       {wa ? (
-        <a
-          href={wa}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-brand hover:underline"
-        >
+        <a href={wa} target="_blank" rel="noopener noreferrer" className={linkClass}>
           WhatsApp
         </a>
       ) : null}
