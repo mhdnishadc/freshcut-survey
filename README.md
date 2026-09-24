@@ -231,8 +231,5 @@ surfaces (monotone lightness, adjacent ΔL ≥ 0.06, light end ≥ 2:1 contrast)
 
 ## Checks
 
-```bash
-npx tsc --noEmit    # types
-npm run lint        # eslint (next build no longer lints in Next 16)
-npm run build       # production build
-```
+
+
