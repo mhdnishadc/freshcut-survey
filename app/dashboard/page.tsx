@@ -8,13 +8,12 @@ import {
   distribution,
   frequency,
   kpis,
-  numberStats,
   overTime,
   vegetableDemand,
   volumeByVegetable,
 } from "@/lib/analytics/aggregate";
 import { getResponses } from "@/lib/data";
-import { num, percent, rupeesShort } from "@/lib/format";
+import { num, percent } from "@/lib/format";
 import { KEY_QUESTIONS } from "@/lib/survey/questions";
 
 export const metadata = { title: "Overview · FreshCut Survey" };
@@ -29,14 +28,12 @@ export default async function DashboardPage() {
     return (
       <EmptyState
         title="No interviews yet"
-        body="Once your field team saves the first hotel interview, the demand numbers and charts will appear here."
+        body="Once your field team saves the first interview, the demand numbers and charts will appear here."
       />
     );
   }
 
   const k = kpis(responses);
-  const hours = numberStats(responses, KEY_QUESTIONS.prepHoursPerDay);
-  const wastage = numberStats(responses, KEY_QUESTIONS.wastagePercent);
   const demand = vegetableDemand(responses);
 
   return (
@@ -44,8 +41,8 @@ export default async function DashboardPage() {
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Survey results</h1>
         <p className="mt-1 text-sm text-muted">
-          {k.interviews} interview{k.interviews === 1 ? "" : "s"} across {k.hotels} hotel
-          {k.hotels === 1 ? "" : "s"} · {k.interviewsThisWeek} in the last 7 days
+          {k.interviews} interview{k.interviews === 1 ? "" : "s"} across {k.hotels} business
+          {k.hotels === 1 ? "" : "es"} · {k.interviewsThisWeek} in the last 7 days
         </p>
       </header>
 
@@ -54,49 +51,37 @@ export default async function DashboardPage() {
         <p className="text-[13px] text-muted">Vegetables these kitchens cut every day</p>
         <p className="mt-1 text-5xl font-semibold tracking-tight">{num(k.dailyVolumeKg, "kg")}</p>
         <p className="mt-1.5 text-[13px] text-muted">
-          Combined daily volume across every hotel surveyed — the market we would be supplying.
+          Combined daily volume across every business surveyed — the market we would be supplying.
         </p>
       </Card>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
-          label="Would buy pre-cut"
+          label="Would try us"
           value={percent(k.yesShare)}
           sub={`${percent(k.warmShare)} said yes or maybe`}
         />
         <Stat
-          label="Want a free trial"
-          value={percent(k.trialShare)}
-          sub="Strongest buying signal on the form"
+          label="Ready for a trial"
+          value={`${k.hotHotels}`}
+          sub={k.hotHotels === 1 ? "business said a plain yes" : "businesses said a plain yes"}
         />
         <Stat
-          label="Their monthly veg spend"
-          value={rupeesShort(k.monthlyVegSpend)}
-          sub="Combined, across all hotels"
+          label="Their daily volume"
+          value={num(k.hotVolumeKg, "kg")}
+          sub="Just the yeses — the first delivery route"
         />
         <Stat
-          label="Prep wages we'd displace"
-          value={rupeesShort(k.monthlyLabourCost)}
-          sub="Combined monthly cutting labour"
+          label="Interviews this week"
+          value={`${k.interviewsThisWeek}`}
+          sub={`${k.interviews} in total`}
         />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title="How interested are they?"
-          hint="Interviewer's own rating, 1 = not interested, 5 = ready to order."
-          footnote={`${k.hotHotels} hotel${k.hotHotels === 1 ? "" : "s"} rated 4 or 5.`}
-        >
-          <BarList
-            items={distribution(responses, KEY_QUESTIONS.interestLevel)}
-            ordinal
-            format={(item) => `${item.count} · ${Math.round(item.share)}%`}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Would they buy fresh-cut vegetables?"
-          hint="The commercial question. Darker means warmer."
+          title="Would they try our products?"
+          hint="Question 13 — the commercial question. Darker means warmer."
         >
           <SplitBar items={distribution(responses, KEY_QUESTIONS.wouldBuyPrecut)} />
         </ChartCard>
@@ -113,11 +98,31 @@ export default async function DashboardPage() {
         </ChartCard>
 
         <ChartCard
-          title="What they would pay above raw price"
-          hint="Our margin ceiling, straight from the customer."
+          title="Why they would buy pre-cut"
+          hint="Question 10 — the main reason, in their own order. This is the advertising line."
         >
           <BarList
-            items={distribution(responses, KEY_QUESTIONS.pricePremium)}
+            items={distribution(responses, KEY_QUESTIONS.precutMainReason)}
+            format={(item) => `${item.count} · ${Math.round(item.share)}%`}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="What goes wrong with their supplier today"
+          hint="Question 6, ranked by how many kitchens raised it. This is the sales script."
+        >
+          <BarList
+            items={frequency(responses, KEY_QUESTIONS.supplierProblems)}
+            format={(item) => `${Math.round(item.share)}%`}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="How much could switch to pre-cut"
+          hint="Question 11 — multiply this by their daily volume to size the opportunity."
+        >
+          <BarList
+            items={distribution(responses, KEY_QUESTIONS.replaceablePercent)}
             ordinal
             format={(item) => `${item.count} · ${Math.round(item.share)}%`}
           />
@@ -129,56 +134,30 @@ export default async function DashboardPage() {
         >
           <BarList items={distribution(responses, KEY_QUESTIONS.deliveryWindow)} />
         </ChartCard>
-
-        <ChartCard
-          title="What goes wrong for them today"
-          hint="Ranked by how many kitchens raised it. This is the sales script."
-        >
-          <BarList
-            items={frequency(responses, KEY_QUESTIONS.painPoints)}
-            format={(item) => `${Math.round(item.share)}%`}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Daily volume by vegetable"
-          hint="Kilograms a day across every kitchen surveyed — build the cutting line in this order."
-        >
-          <BarList
-            items={volumeByVegetable(responses)}
-            limit={10}
-            format={(item) => `${num(item.count)} kg`}
-          />
-        </ChartCard>
       </section>
 
       <ChartCard
+        title="Daily volume by vegetable"
+        hint="Kilograms a day across every kitchen surveyed — build the cutting line in this order."
+      >
+        <BarList
+          items={volumeByVegetable(responses)}
+          limit={12}
+          format={(item) => `${num(item.count)} kg`}
+        />
+      </ChartCard>
+
+      <ChartCard
         title="The order book, vegetable by vegetable"
-        hint="What they get through, what they pay now, and what they say they would pay pre-cut."
-        footnote="Prices are medians. The premium column is what our margin has to fit inside."
+        hint="What they get through, and how many of them asked for it pre-cut."
+        footnote="Build the first cutting line down this list, top to bottom."
       >
         <VegetableTable rows={demand} />
       </ChartCard>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <ChartCard title="Interviews per day" hint="Is the survey keeping pace?">
-            <TrendChart points={overTime(responses)} />
-          </ChartCard>
-        </div>
-
-        <ChartCard title="The labour they spend" hint="Per kitchen, per day.">
-          <dl className="space-y-3">
-            <Line label="Median hours cutting & washing" value={num(hours?.median ?? null, "hrs")} />
-            <Line label="Worst case seen" value={num(hours?.max ?? null, "hrs")} />
-            <Line label="Median wastage from peeling" value={percent(wastage?.median ?? null)} />
-            <Line
-              label="Average interest rating"
-              value={k.avgInterest === null ? "—" : `${k.avgInterest.toFixed(1)} / 5`}
-            />
-          </dl>
-        </ChartCard>
-      </section>
+      <ChartCard title="Interviews per day" hint="Is the survey keeping pace?">
+        <TrendChart points={overTime(responses)} />
+      </ChartCard>
 
       <Card>
         <p className="text-[13px] text-muted">
@@ -186,18 +165,9 @@ export default async function DashboardPage() {
           <Link href="/dashboard/leads" className="font-medium text-brand hover:underline">
             Open the leads list
           </Link>{" "}
-          — hotels ranked by interest, with one-tap call and WhatsApp.
+          — businesses ranked by their answer to question 13, with one-tap call and WhatsApp.
         </p>
       </Card>
-    </div>
-  );
-}
-
-function Line({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2.5 last:border-0 last:pb-0">
-      <dt className="text-[13px] text-muted">{label}</dt>
-      <dd className="shrink-0 text-base font-semibold tabular-nums">{value}</dd>
     </div>
   );
 }

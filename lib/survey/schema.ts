@@ -91,6 +91,9 @@ function checkOne(
       }
       const allowed = new Set((question.options ?? []).map((o) => o.value));
       if (value.some((v) => !allowed.has(v))) add("Unknown option selected");
+      if (question.maxSelect !== undefined && value.length > question.maxSelect) {
+        add(`Pick at most ${question.maxSelect}`);
+      }
       return;
     }
 

@@ -19,10 +19,9 @@ function cell(value: unknown): string {
 
 const HOTEL_COLUMNS = [
   ["Hotel", (r: ResponseWithHotel) => r.hotel.name],
+  ["Location", (r: ResponseWithHotel) => r.hotel.location],
   ["Type", (r: ResponseWithHotel) => r.hotel.hotel_type],
-  ["Branches", (r: ResponseWithHotel) => r.hotel.branches],
   ["Contact", (r: ResponseWithHotel) => r.hotel.contact_person],
-  ["Role", (r: ResponseWithHotel) => r.hotel.contact_role],
   ["Phone", (r: ResponseWithHotel) => r.hotel.phone],
   ["WhatsApp", (r: ResponseWithHotel) => r.hotel.whatsapp],
   ["Total kg/day", (r: ResponseWithHotel) => r.veg_kg_per_day],

@@ -11,6 +11,14 @@ import type { ResponseWithHotel } from "@/lib/types";
 
 type SortKey = "recent" | "interest" | "volume" | "name";
 
+/** Question 13's three answers, warmest first — what "most interested" means now. */
+const RANK: Record<string, number> = { yes: 3, maybe: 2, no: 1 };
+
+function rankOf(response: ResponseWithHotel): number {
+  const value = response.answers[KEY_QUESTIONS.wouldBuyPrecut];
+  return typeof value === "string" ? (RANK[value] ?? 0) : 0;
+}
+
 export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
@@ -27,7 +35,12 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
     const filtered = responses.filter((response) => {
       if (kind !== "all" && response.hotel.hotel_type !== kind) return false;
       if (!needle) return true;
-      return [response.hotel.name, response.hotel.contact_person, response.hotel.phone]
+      return [
+        response.hotel.name,
+        response.hotel.location,
+        response.hotel.contact_person,
+        response.hotel.phone,
+      ]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(needle));
     });
@@ -36,7 +49,7 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
     return [...filtered].sort((a, b) => {
       switch (sort) {
         case "interest":
-          return (b.interest_level ?? -1) - (a.interest_level ?? -1);
+          return rankOf(b) - rankOf(a);
         case "volume":
           return (b.veg_kg_per_day ?? -1) - (a.veg_kg_per_day ?? -1);
         case "name":
@@ -74,10 +87,10 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
         <select
           value={kind}
           onChange={(e) => setKind(e.target.value)}
-          aria-label="Filter by kitchen type"
+          aria-label="Filter by business type"
           className="min-h-12 rounded-xl border border-border-strong bg-surface px-3 text-[15px]"
         >
-          <option value="all">All kitchen types</option>
+          <option value="all">All business types</option>
           {kinds.map((item) => (
             <option key={item} value={item}>
               {labelOf("hotel_type", item)}
@@ -91,7 +104,7 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
           className="min-h-12 rounded-xl border border-border-strong bg-surface px-3 text-[15px]"
         >
           <option value="recent">Most recent</option>
-          <option value="interest">Most interested</option>
+          <option value="interest">Warmest first</option>
           <option value="volume">Biggest volume</option>
           <option value="name">Name A–Z</option>
         </select>
@@ -133,8 +146,7 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
                   <th scope="col" className="px-4 py-3 font-medium">Hotel</th>
                   <th scope="col" className="px-4 py-3 font-medium">Contact</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">kg/day</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Would buy</th>
-                  <th scope="col" className="px-4 py-3 text-right font-medium">Interest</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Would try us</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">Surveyed</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">
                     <span className="sr-only">Collected information</span>
@@ -151,10 +163,8 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
                       >
                         {response.hotel.name}
                       </Link>
-                      {response.hotel.hotel_type ? (
-                        <p className="text-[12px] text-faint">
-                          {labelOf("hotel_type", response.hotel.hotel_type)}
-                        </p>
+                      {subtitleOf(response) ? (
+                        <p className="text-[12px] text-faint">{subtitleOf(response)}</p>
                       ) : null}
                     </td>
                     <td className="px-4 py-3">
@@ -166,9 +176,6 @@ export function HotelTable({ responses }: { responses: ResponseWithHotel[] }) {
                     </td>
                     <td className="px-4 py-3">
                       <BuyBadge response={response} />
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {response.interest_level ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-[13px] whitespace-nowrap text-muted">
                       {relativeDate(response.created_at)}
@@ -209,11 +216,11 @@ function HotelCard({ response }: { response: ResponseWithHotel }) {
             {response.hotel.name}
           </Link>
           <p className="text-[13px] text-muted">
-            {response.hotel.contact_person ??
-              (response.hotel.hotel_type
-                ? labelOf("hotel_type", response.hotel.hotel_type)
-                : "No contact recorded")}
+            {subtitleOf(response) || "No type or location recorded"}
           </p>
+          {response.hotel.contact_person ? (
+            <p className="text-[12px] text-faint">{response.hotel.contact_person}</p>
+          ) : null}
         </div>
         <BuyBadge response={response} />
       </div>
@@ -222,12 +229,6 @@ function HotelCard({ response }: { response: ResponseWithHotel }) {
         <span>
           <strong className="text-foreground tabular-nums">{num(response.veg_kg_per_day)}</strong>{" "}
           kg/day
-        </span>
-        <span>
-          Interest{" "}
-          <strong className="text-foreground tabular-nums">
-            {response.interest_level ?? "—"}
-          </strong>
         </span>
         <span className="ml-auto text-faint">{relativeDate(response.created_at)}</span>
       </div>
@@ -304,4 +305,12 @@ function BuyBadge({ response }: { response: ResponseWithHotel }) {
 function labelOf(questionId: string, value: string): string {
   const question = QUESTION_BY_ID.get(questionId);
   return question ? optionLabel(question, value) : value;
+}
+
+/** "Restaurant · Kaloor" — whichever of the two we actually recorded. */
+function subtitleOf(response: ResponseWithHotel): string {
+  const { hotel_type, location } = response.hotel;
+  return [hotel_type ? labelOf("hotel_type", hotel_type) : null, location]
+    .filter(Boolean)
+    .join(" · ");
 }

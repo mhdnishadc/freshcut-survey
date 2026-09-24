@@ -1,4 +1,4 @@
-import { num, percent, rupees } from "@/lib/format";
+import { num } from "@/lib/format";
 import type { VegetableDemand } from "@/lib/analytics/aggregate";
 
 /**
@@ -6,7 +6,7 @@ import type { VegetableDemand } from "@/lib/analytics/aggregate";
  *
  * This is the table the founders read before deciding what the first processing
  * line cuts. It is a real <table> because every column is a different quantity —
- * a bar chart could carry one of them, not five — and it scrolls inside its own
+ * a bar chart could carry one of them, not three — and it scrolls inside its own
  * container so the page never scrolls sideways on a phone.
  */
 export function VegetableTable({ rows }: { rows: VegetableDemand[] }) {
@@ -26,9 +26,7 @@ export function VegetableTable({ rows }: { rows: VegetableDemand[] }) {
             <th scope="col" className="px-4 py-2.5 font-medium">Vegetable</th>
             <th scope="col" className="px-4 py-2.5 text-right font-medium">kg/day</th>
             <th scope="col" className="px-4 py-2.5 text-right font-medium">Kitchens</th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">Pays now</th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">Would pay</th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">Premium</th>
+            <th scope="col" className="px-4 py-2.5 text-right font-medium">Want it pre-cut</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -41,16 +39,13 @@ export function VegetableTable({ rows }: { rows: VegetableDemand[] }) {
                 {row.kgPerDay > 0 ? num(row.kgPerDay) : "—"}
               </td>
               <td className="px-4 py-2.5 text-right tabular-nums text-muted">{row.kitchens}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums">{rupees(row.priceNow)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums">{rupees(row.pricePrecut)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums">
-                {row.premiumPercent === null ? (
-                  <span className="text-faint">—</span>
-                ) : (
-                  <span className={row.premiumPercent > 0 ? "text-brand" : "text-muted"}>
-                    {row.premiumPercent > 0 ? "+" : ""}
-                    {percent(row.premiumPercent)}
+                {row.wantPrecut > 0 ? (
+                  <span className="font-medium text-brand">
+                    {row.wantPrecut} of {row.kitchens}
                   </span>
+                ) : (
+                  <span className="text-faint">—</span>
                 )}
               </td>
             </tr>

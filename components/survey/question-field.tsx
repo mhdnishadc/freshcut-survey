@@ -139,17 +139,32 @@ function Control({
 
     case "multi_select": {
       const selected = Array.isArray(value) ? value : [];
+      const atCap =
+        question.maxSelect !== undefined && selected.length >= question.maxSelect;
+
       return (
-        <ChoiceGroup
-          name={question.id}
-          multi
-          options={question.options ?? []}
-          selected={selected}
-          onToggle={(v) =>
-            onChange(selected.includes(v) ? selected.filter((s) => s !== v) : [...selected, v])
-          }
-          describedBy={describedBy}
-        />
+        <div className="space-y-2">
+          <ChoiceGroup
+            name={question.id}
+            multi
+            options={question.options ?? []}
+            selected={selected}
+            // At the cap, only the already-ticked boxes still respond. Untick
+            // one to free a slot — which is the conversation we want the
+            // interviewer to have when a chef names five "top three" things.
+            disabledUnselected={atCap}
+            onToggle={(v) =>
+              onChange(selected.includes(v) ? selected.filter((s) => s !== v) : [...selected, v])
+            }
+            describedBy={describedBy}
+          />
+          {question.maxSelect !== undefined ? (
+            <p aria-live="polite" className={cx("text-[13px]", atCap ? "text-brand" : "text-muted")}>
+              {selected.length} of {question.maxSelect} chosen
+              {atCap ? " — untick one to change it" : ""}
+            </p>
+          ) : null}
+        </div>
       );
     }
 
@@ -222,6 +237,7 @@ function ChoiceGroup({
   onToggle,
   multi = false,
   columns = 1,
+  disabledUnselected = false,
   describedBy,
 }: {
   name: string;
@@ -230,6 +246,8 @@ function ChoiceGroup({
   onToggle: (value: string) => void;
   multi?: boolean;
   columns?: 1 | 2;
+  /** Grey out and block every box that is not already ticked. */
+  disabledUnselected?: boolean;
   describedBy?: string;
 }) {
   return (
@@ -241,18 +259,21 @@ function ChoiceGroup({
     >
       {options.map((option) => {
         const isSelected = selected.includes(option.value);
+        const isDisabled = disabledUnselected && !isSelected;
         return (
           <button
             key={option.value}
             type="button"
             role={multi ? "checkbox" : "radio"}
             aria-checked={isSelected}
+            disabled={isDisabled}
             onClick={() => onToggle(option.value)}
             className={cx(
               "flex min-h-12 items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] transition-colors",
               isSelected
                 ? "border-brand bg-brand-soft font-medium text-foreground"
                 : "border-border-strong bg-surface text-foreground hover:bg-surface-2",
+              isDisabled && "cursor-not-allowed opacity-40 hover:bg-surface",
             )}
           >
             <span

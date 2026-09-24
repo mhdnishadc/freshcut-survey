@@ -12,10 +12,13 @@ manager, and record the answers here.
 The dashboard then answers the questions that decide whether to build the operation:
 
 - How many kilograms a day, of which vegetable? (our order volume and our SKU list)
-- What do they pay for each one now, and what would they pay pre-cut? (our margin)
-- How much labour and wage cost would we be displacing?
-- What delivery window, pack size and shelf life do they need? (our production shift)
-- Who is ready to order right now? (the call sheet)
+- Which of those do they want pre-cut, and why? (our SKU list and our sales pitch)
+- What is wrong with the supplier they have now? (our opening)
+- What delivery window, pack size and frequency do they need? (our production shift)
+- Who said they would try us? (the call sheet)
+
+The questionnaire mirrors the printed form one-for-one: nothing is asked that is
+not on it, and nothing on it is left out.
 
 ---
 
@@ -41,8 +44,7 @@ HTML and one inline SVG, so nothing heavy ships to a field phone.
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. **SQL Editor → New query**, paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql), Run.
-   Then do the same for [`0002_drop_location.sql`](supabase/migrations/0002_drop_location.sql),
-   which trims the schema down to the shortened questionnaire. Run them in order.
+   That is the whole schema — there is only one migration, and it is safe to re-run.
 3. **Authentication → Users → Add user** — create one account per team member
    (email + password, tick "Auto Confirm User"). There is no public sign-up: this
    app is for your team only.
@@ -90,22 +92,31 @@ by question id.
 
 ```ts
 {
-  id: "monthly_veg_spend",     // storage key — never change it once interviews exist
-  label: "Monthly spend on vegetables",
+  id: "trial_quantity_kg",     // storage key — never change it once interviews exist
+  label: "Approximate trial quantity",
   type: "number",              // short_text | long_text | number | single_select
                                // | multi_select | yes_no | rating | table
-  unit: "₹",
-  min: 0, max: 5000,
+  unit: "kg",
+  min: 0, max: 500,
   decimal: true,
   help: "Shown under the label — tell the interviewer how to ask.",
 }
 ```
 
-Conditional questions use `showIf`, so a follow-up only appears when it is
-relevant and is not enforced while hidden:
+A `multi_select` can cap how many boxes may be ticked, which is how question 5's
+"TOP 3" is enforced rather than merely requested:
 
 ```ts
-{ id: "rejection_reason", /* … */ showIf: { questionId: "would_buy_precut", in: ["no"] } }
+{ id: "supplier_factors", type: "multi_select", maxSelect: 3, /* … */ }
+```
+
+Conditional questions use `showIf`, so a follow-up only appears when it is
+relevant and is not enforced while hidden. The controlling question may be a
+`multi_select`, which is how every "Other: ____" box on the paper form works:
+
+```ts
+{ id: "precut_items_now",        /* … */ showIf: { questionId: "buys_precut_now",   in: ["yes"] } }
+{ id: "supplier_problems_other", /* … */ showIf: { questionId: "supplier_problems", in: ["other"] } }
 ```
 
 A `table` question is a grid: `rows` are the things being measured, `columns` are
@@ -188,19 +199,19 @@ to search and filter.
 
 **Two tables, not one.** `hotels` is the durable business entity, `survey_responses`
 are interviews attached to it. Re-interviewing a hotel updates the same hotel row
-and adds a second response, so contact details never fork. Hotels are matched on
-**name alone** — with no area recorded there is nothing else to match on, so two
-different kitchens sharing a name will merge. A repeat visit also only patches in
-the fields it actually recorded, so a rushed second interview cannot blank the
+and adds a second response, so contact details never fork. Businesses are matched
+on **name + location**, so two kitchens sharing a name in different areas stay
+apart; the cost is that a revisit which leaves Location blank will not recognise
+one first recorded with it. A duplicate row is visible and fixable, whereas two
+different kitchens silently merged corrupts both. A repeat visit also only patches
+in the fields it actually recorded, so a rushed second interview cannot blank the
 phone number the first one worked to get.
 
-**One vegetable table, not four.** The printed questionnaire asked the same twelve
-vegetables four times over — daily usage, quantity per order, current price,
-expected pre-cut price — about eighty boxes per interview. They are merged into a
-single grid of kg/day, ₹/kg now and ₹/kg pre-cut. Quantity per order is dropped
-because it is purchase frequency × daily usage, and both of those are asked.
-Rows stay collapsed until tapped, so twelve vegetables are not twelve walls of
-empty boxes. `survey_responses.veg_kg_per_day` is the kg/day column summed.
+**One vegetable table, one column.** Question 2 asks a single thing per vegetable —
+how much they get through in a day — so the grid has one column, not the four the
+older draft carried. Rows stay collapsed until tapped, so twelve vegetables are
+not twelve walls of empty boxes. `survey_responses.veg_kg_per_day` is that column
+summed.
 
 **Drafts survive everything.** Every keystroke autosaves to `localStorage`. A submit
 that fails goes into a retry queue and flushes when the phone reconnects. An

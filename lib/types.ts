@@ -4,16 +4,15 @@ import type { AnswerValue } from "./survey/questions";
 export type Hotel = {
   id: string;
   name: string;
+  /** Free text area/town/landmark. The other half of `dedupe_key`. */
+  location: string | null;
   hotel_type: string | null;
-  branches: number | null;
-  /** Captured with one tap on the survey form; the survey asks no address. */
-  latitude: number | null;
-  longitude: number | null;
   contact_person: string | null;
-  contact_role: string | null;
   phone: string | null;
   whatsapp: string | null;
-  email: string | null;
+  /** Captured with one tap on the survey form, alongside the typed location. */
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -23,10 +22,8 @@ export type SurveyResponse = {
   id: string;
   hotel_id: string;
   answers: Record<string, AnswerValue>;
-  interest_level: number | null;
+  /** Summed from the kg_day column of the veg_table answer. */
   veg_kg_per_day: number | null;
-  status: "submitted" | "needs_followup" | "converted" | "rejected";
-  notes: string | null;
   questionnaire_version: string | null;
   created_at: string;
 };

@@ -28,13 +28,18 @@ type HotelRow = Record<string, string | number | null>;
 const UNIQUE_VIOLATION = "23505";
 
 /**
- * Hotels are matched on name alone, mirroring the generated `dedupe_key` column
- * in the database. The survey no longer records an area, so two genuinely
- * different kitchens sharing a name will merge into one record — the trade for
- * a form a chef will actually finish.
+ * Businesses are matched on name + location, mirroring the generated
+ * `dedupe_key` column in the database (see 0003_location.sql). Both halves are
+ * normalised the same way Postgres does, and a blank location becomes "" rather
+ * than null, so the two definitions cannot drift apart.
+ *
+ * The cost of this is that a revisit which leaves Location blank does not
+ * recognise a business that was first recorded with one. That is the deliberate
+ * trade: a duplicate row is visible and fixable, whereas two different kitchens
+ * silently merged into one record corrupts both.
  */
-function dedupeKey(name: string): string {
-  return name.trim().toLowerCase();
+function dedupeKey(name: string, location: string | null): string {
+  return `${name.trim().toLowerCase()}|${(location ?? "").trim().toLowerCase()}`;
 }
 
 /**
@@ -74,10 +79,6 @@ function split(values: SurveyValues): { hotel: HotelRow; answers: Record<string,
   return { hotel, answers };
 }
 
-function asNumber(value: AnswerValue | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
 /**
  * Stores one completed interview.
  *
@@ -105,18 +106,18 @@ export async function submitSurvey(payload: SubmitPayload): Promise<SubmitResult
 
   const { hotel, answers } = split(cleaned);
   const name = typeof hotel.name === "string" ? hotel.name : null;
-  // The one thing the form will not let through blank, because a hotel row
+  // The one thing the form will not let through blank, because a business row
   // cannot exist without it.
-  if (!name) return { ok: false, error: "Hotel name is required." };
+  if (!name) return { ok: false, error: "Business name is required." };
 
   if (payload.coords) {
     hotel.latitude = payload.coords.latitude;
     hotel.longitude = payload.coords.longitude;
   }
 
-  // Re-visiting a hotel updates the existing row rather than creating a second
-  // one, so contact details stay in one place across repeat interviews.
-  const key = dedupeKey(name);
+  // Re-visiting a business updates the existing row rather than creating a
+  // second one, so contact details stay in one place across repeat interviews.
+  const key = dedupeKey(name, typeof hotel.location === "string" ? hotel.location : null);
   const { data: existing } = await supabase
     .from("hotels")
     .select("id")
@@ -168,12 +169,13 @@ export async function submitSurvey(payload: SubmitPayload): Promise<SubmitResult
   // the leads list sortable in SQL.
   const kgPerDay = tableColumnTotal(answers[KEY_QUESTIONS.vegTable], "kg_day");
 
+  // `interest_level` and `notes` are left unset: the questionnaire no longer
+  // asks the interviewer for either. The columns stay in the schema so old rows
+  // remain readable, but nothing writes them now.
   const { error: responseError } = await supabase.from("survey_responses").insert({
     hotel_id: hotelId,
     answers,
-    interest_level: asNumber(answers[KEY_QUESTIONS.interestLevel]),
     veg_kg_per_day: kgPerDay,
-    notes: typeof answers.notes === "string" ? answers.notes : null,
     questionnaire_version: QUESTIONNAIRE_VERSION,
     submitted_by: user.id,
   });

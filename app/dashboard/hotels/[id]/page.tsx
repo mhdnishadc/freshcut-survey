@@ -5,6 +5,7 @@ import { getHotel } from "@/lib/data";
 import { num, shortDate, telHref, whatsappHref } from "@/lib/format";
 import {
   HOTEL_FIELD_BY_QUESTION_ID,
+  KEY_QUESTIONS,
   QUESTION_BY_ID,
   SECTIONS,
   asTableValue,
@@ -37,10 +38,15 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
         </LinkButton>
         <h1 className="mt-3 text-xl font-semibold tracking-tight">{hotel.name}</h1>
         <p className="mt-1 text-sm text-muted">
-          {hotel.hotel_type
-            ? optionLabel(QUESTION_BY_ID.get("hotel_type")!, hotel.hotel_type)
-            : "Kitchen type not recorded"}
-          {responses.length > 1 ? ` · ${responses.length} interviews` : ""}
+          {[
+            hotel.hotel_type
+              ? optionLabel(QUESTION_BY_ID.get("hotel_type")!, hotel.hotel_type)
+              : "Business type not recorded",
+            hotel.location,
+            responses.length > 1 ? `${responses.length} interviews` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       </div>
 
@@ -48,10 +54,9 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
         <CardTitle>Contact</CardTitle>
         <dl className="grid gap-3 sm:grid-cols-2">
           <Field label="Person" value={hotel.contact_person} />
-          <Field label="Role" value={hotel.contact_role} />
           <Field label="Phone" value={hotel.phone} />
           <Field label="WhatsApp" value={hotel.whatsapp} />
-          <Field label="Branches" value={hotel.branches} />
+          <Field label="Location" value={hotel.location} />
         </dl>
 
         {(tel || wa || (hotel.latitude && hotel.longitude)) && (
@@ -91,7 +96,7 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
       {latest ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="brand">Interest {latest.interest_level ?? "—"}/5</Badge>
+            <WouldTryBadge answers={latest.answers} />
             <Badge>{num(latest.veg_kg_per_day, "kg/day")}</Badge>
             <span className="text-[13px] text-faint">
               Interviewed {shortDate(latest.created_at)}
@@ -134,7 +139,6 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
                   <li key={response.id} className="flex justify-between gap-3 text-muted">
                     <span>{shortDate(response.created_at)}</span>
                     <span className="tabular-nums">
-                      Interest {response.interest_level ?? "—"}/5 ·{" "}
                       {num(response.veg_kg_per_day, "kg/day")}
                     </span>
                   </li>
@@ -153,6 +157,19 @@ export default async function HotelDetailPage(props: PageProps<"/dashboard/hotel
 }
 
 // ---------------------------------------------------------------------------
+
+/** Question 13's answer, which is what "how warm is this lead" now means. */
+function WouldTryBadge({ answers }: { answers: Record<string, AnswerValue> }) {
+  const question = QUESTION_BY_ID.get(KEY_QUESTIONS.wouldBuyPrecut);
+  const value = answers[KEY_QUESTIONS.wouldBuyPrecut];
+  if (!question || typeof value !== "string") return <Badge>Would try us: not answered</Badge>;
+
+  return (
+    <Badge tone={value === "yes" ? "brand" : value === "maybe" ? "warning" : "neutral"}>
+      Would try us: {optionLabel(question, value)}
+    </Badge>
+  );
+}
 
 function Field({ label, value }: { label: string; value: string | number | null }) {
   return (

@@ -1,36 +1,45 @@
--- FreshCut Survey — initial schema
+-- FreshCut Survey — schema
 -- Run once in the Supabase SQL editor (Dashboard > SQL Editor > New query > Run).
--- Safe to re-run: every statement is guarded.
+-- Safe to re-run: every statement is guarded, and nothing here drops or deletes.
+--
+-- This is the only migration. It matches the printed questionnaire in
+-- lib/survey/questions.ts: every column below is written by the app, and every
+-- answer that is not a column lives in `survey_responses.answers`. Changing the
+-- questionnaire therefore needs no migration at all — only adding or removing a
+-- promoted column does.
+--
+-- Replacing an older database: this file creates tables but never alters an
+-- existing one, so if `public.hotels` already exists from an earlier schema, it
+-- is left exactly as it is. Drop the two tables first, then run this.
 
 -- ---------------------------------------------------------------------------
--- hotels: the durable business entity. One row per hotel/restaurant we visit.
+-- hotels: the durable business entity. One row per business we visit —
+-- hotel, restaurant, catering, cloud kitchen or bakery.
 -- ---------------------------------------------------------------------------
 create table if not exists public.hotels (
   id                uuid primary key default gen_random_uuid(),
 
+  -- Question 1.
   name              text not null,
+  location          text,
   hotel_type        text,
-  locality          text,
-  address           text,
-  city              text,
-  pincode           text,
 
+  -- Question 13's contact block.
+  contact_person    text,
+  phone             text,
+  whatsapp          text,
+
+  -- Captured with one tap on the survey form, alongside the typed location.
   latitude          double precision,
   longitude         double precision,
 
-  contact_person    text,
-  contact_role      text,
-  phone             text,
-  whatsapp          text,
-  email             text,
-
-  seating_capacity  integer,
-  meals_per_day     integer,
-
-  -- Normalised name+locality, used to recognise a hotel we have already
+  -- Normalised name + location, used to recognise a business we have already
   -- surveyed so a repeat visit updates the same row instead of duplicating it.
+  -- Two "Hotel Aliya" in different areas are two different customers; merging
+  -- them would corrupt both records. `coalesce` keeps a blank location behaving
+  -- like an empty string rather than poisoning the whole key to NULL.
   dedupe_key        text generated always as (
-                      lower(trim(name)) || '|' || lower(trim(coalesce(locality, '')))
+                      lower(trim(name)) || '|' || lower(trim(coalesce(location, '')))
                     ) stored,
 
   created_by        uuid default auth.uid() references auth.users (id) on delete set null,
@@ -39,8 +48,8 @@ create table if not exists public.hotels (
 );
 
 create unique index if not exists hotels_dedupe_key_idx on public.hotels (dedupe_key);
-create index if not exists hotels_locality_idx        on public.hotels (locality);
-create index if not exists hotels_created_at_idx      on public.hotels (created_at desc);
+create index if not exists hotels_location_idx   on public.hotels (location);
+create index if not exists hotels_created_at_idx on public.hotels (created_at desc);
 
 -- ---------------------------------------------------------------------------
 -- survey_responses: one row per completed interview.
@@ -54,12 +63,8 @@ create table if not exists public.survey_responses (
   answers         jsonb not null default '{}'::jsonb,
 
   -- Promoted out of `answers` so leads can be sorted and filtered in SQL.
-  interest_level  integer check (interest_level between 1 and 5),
+  -- Total kg/day, summed from the kg_day column of the veg_table answer.
   veg_kg_per_day  numeric,
-
-  status          text not null default 'submitted'
-                    check (status in ('submitted', 'needs_followup', 'converted', 'rejected')),
-  notes           text,
 
   -- Version of the questionnaire this interview was answered against, so old
   -- responses stay interpretable after the question set changes.
@@ -71,7 +76,6 @@ create table if not exists public.survey_responses (
 
 create index if not exists survey_responses_hotel_idx      on public.survey_responses (hotel_id);
 create index if not exists survey_responses_created_at_idx on public.survey_responses (created_at desc);
-create index if not exists survey_responses_interest_idx   on public.survey_responses (interest_level desc nulls last);
 create index if not exists survey_responses_answers_idx    on public.survey_responses using gin (answers);
 
 -- ---------------------------------------------------------------------------
@@ -97,7 +101,7 @@ create trigger hotels_set_updated_at
 --
 -- Only signed-in team members can touch survey data. The `anon` role (the key
 -- shipped in the browser bundle) is granted nothing at all, so an anonymous
--- visitor cannot read a single hotel name or phone number.
+-- visitor cannot read a single business name or phone number.
 -- ---------------------------------------------------------------------------
 alter table public.hotels           enable row level security;
 alter table public.survey_responses enable row level security;

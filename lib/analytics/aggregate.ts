@@ -144,17 +144,16 @@ export type Kpis = {
   hotels: number;
   interviews: number;
   interviewsThisWeek: number;
-  /** kg of vegetables per day across every hotel surveyed — our market size. */
+  /** kg of vegetables per day across every business surveyed — our market size. */
   dailyVolumeKg: number;
-  monthlyVegSpend: number;
-  monthlyLabourCost: number;
-  /** Share of interviews answering "yes" to buying pre-cut. */
+  /** Share of interviews answering "yes" to question 13. */
   yesShare: number;
   /** Share answering yes or maybe. */
   warmShare: number;
-  trialShare: number;
+  /** Businesses that said a plain yes — the ones with a trial to plan. */
   hotHotels: number;
-  avgInterest: number | null;
+  /** Combined daily volume of just those, i.e. the first delivery route. */
+  hotVolumeKg: number;
 };
 
 export function kpis(responses: ResponseWithHotel[]): Kpis {
@@ -164,13 +163,7 @@ export function kpis(responses: ResponseWithHotel[]): Kpis {
     .map((r) => r.answers[KEY_QUESTIONS.wouldBuyPrecut])
     .filter((v): v is string => typeof v === "string");
 
-  const trial = responses
-    .map((r) => r.answers[KEY_QUESTIONS.wantsTrial])
-    .filter((v): v is string => typeof v === "string");
-
-  const interest = responses
-    .map((r) => r.interest_level)
-    .filter((v): v is number => typeof v === "number");
+  const hot = responses.filter((r) => r.answers[KEY_QUESTIONS.wouldBuyPrecut] === "yes");
 
   return {
     hotels: new Set(responses.map((r) => r.hotel_id)).size,
@@ -179,14 +172,10 @@ export function kpis(responses: ResponseWithHotel[]): Kpis {
     // Read off the promoted column rather than the JSON, so it stays correct
     // even for interviews saved before the table question existed.
     dailyVolumeKg: responses.reduce((acc, r) => acc + (r.veg_kg_per_day ?? 0), 0),
-    monthlyVegSpend: total(responses, KEY_QUESTIONS.monthlyVegSpend),
-    monthlyLabourCost: total(responses, KEY_QUESTIONS.monthlyPrepLabourCost),
-    // "Warm" now spans the four-point scale the printed form used.
-    yesShare: share(buy, (v) => v === "definitely"),
-    warmShare: share(buy, (v) => v === "definitely" || v === "probably" || v === "maybe"),
-    trialShare: share(trial, (v) => v === "yes"),
-    hotHotels: interest.filter((v) => v >= 4).length,
-    avgInterest: interest.length ? interest.reduce((a, b) => a + b, 0) / interest.length : null,
+    yesShare: share(buy, (v) => v === "yes"),
+    warmShare: share(buy, (v) => v === "yes" || v === "maybe"),
+    hotHotels: hot.length,
+    hotVolumeKg: hot.reduce((acc, r) => acc + (r.veg_kg_per_day ?? 0), 0),
   };
 }
 
@@ -215,26 +204,15 @@ export type VegetableDemand = {
   kitchens: number;
   /** Combined kilograms per day across those kitchens — the order book. */
   kgPerDay: number;
-  /** Median of what they pay for it raw today. */
-  priceNow: number | null;
-  /** Median of what they say they would pay for it pre-cut. */
-  pricePrecut: number | null;
-  /** The gap between the two, as a percentage of the raw price. */
-  premiumPercent: number | null;
+  /** How many of those kitchens want this one pre-cut (question 9). */
+  wantPrecut: number;
 };
-
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
 
 /**
  * The single most valuable output of this survey: for each vegetable, how much
- * of it the surveyed kitchens get through, what they pay now, and what they say
- * they would pay pre-cut. Ordered by daily volume, because that is the order in
- * which the processing line should be built.
+ * of it the surveyed kitchens get through and how many of them want it pre-cut.
+ * Ordered by daily volume, because that is the order in which the processing
+ * line should be built.
  */
 export function vegetableDemand(
   responses: ResponseWithHotel[],
@@ -245,46 +223,40 @@ export function vegetableDemand(
 
   const rows = new Map<
     string,
-    { label: string; kitchens: number; kg: number; now: number[]; precut: number[] }
+    { label: string; kitchens: number; kg: number; wantPrecut: number }
   >();
 
   for (const response of responses) {
     const table = asTableValue(response.answers[questionId]);
+    // Question 9's answer, so "uses 40 kg of onion and wants it pre-cut" can be
+    // read off one row instead of two charts.
+    const wanted = response.answers[KEY_QUESTIONS.precutWanted];
+    const wantedSet = new Set(Array.isArray(wanted) ? wanted : []);
+
     for (const [rowKey, cells] of Object.entries(table.cells)) {
       const entry = rows.get(rowKey) ?? {
         label: tableRowLabel(question, table, rowKey),
         kitchens: 0,
         kg: 0,
-        now: [],
-        precut: [],
+        wantPrecut: 0,
       };
 
       entry.kitchens += 1;
       if (typeof cells.kg_day === "number") entry.kg += cells.kg_day;
-      if (typeof cells.price_now === "number") entry.now.push(cells.price_now);
-      if (typeof cells.price_precut === "number") entry.precut.push(cells.price_precut);
+      if (wantedSet.has(rowKey)) entry.wantPrecut += 1;
 
       rows.set(rowKey, entry);
     }
   }
 
   return [...rows.entries()]
-    .map(([key, entry]) => {
-      const priceNow = median(entry.now);
-      const pricePrecut = median(entry.precut);
-      return {
-        key,
-        label: entry.label,
-        kitchens: entry.kitchens,
-        kgPerDay: entry.kg,
-        priceNow,
-        pricePrecut,
-        premiumPercent:
-          priceNow && pricePrecut && priceNow > 0
-            ? ((pricePrecut - priceNow) / priceNow) * 100
-            : null,
-      };
-    })
+    .map(([key, entry]) => ({
+      key,
+      label: entry.label,
+      kitchens: entry.kitchens,
+      kgPerDay: entry.kg,
+      wantPrecut: entry.wantPrecut,
+    }))
     .sort((a, b) => b.kgPerDay - a.kgPerDay || b.kitchens - a.kitchens);
 }
 
