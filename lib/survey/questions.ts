@@ -173,7 +173,9 @@ const VEG_COLUMNS: TableColumn[] = [
 
 export const SECTIONS: Section[] = [
   // -------------------------------------------------------------------------
-  // Question 1.
+  // Question 1. The contact block belongs to question 13 and sits on the last
+  // step, where the paper form puts it — asking a stranger for their number is
+  // the last thing you do, not the first.
   {
     id: "hotel",
     title: "Business details",
@@ -431,12 +433,14 @@ export const SECTIONS: Section[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Question 13. The closing ask, and the brief for the first delivery.
+  // Question 13 — the closing ask, the brief for the first delivery, and the
+  // contact details. Last step on purpose: by now they have talked to you for
+  // ten minutes, which is when a phone number is easiest to get.
   {
     id: "trial",
-    title: "Would they try us?",
+    title: "Close and contact",
     description:
-      "Ask it straight: good quality, hygiene, competitive pricing and reliable delivery.",
+      "Ask it straight: good quality, hygiene, competitive pricing and reliable delivery. Then take their number.",
     questions: [
       {
         id: "would_buy_precut",
@@ -467,11 +471,12 @@ export const SECTIONS: Section[] = [
         showIf: { questionId: "would_buy_precut", in: ["yes"] },
       },
       {
+        // Deliberately NOT gated behind a "yes". A maybe with a phone number is
+        // a lead we can call back; a maybe without one is nothing at all.
         id: "contact_person",
         label: "Contact person",
         type: "short_text",
         placeholder: "Name",
-        showIf: { questionId: "would_buy_precut", in: ["yes"] },
       },
       {
         id: "phone",
@@ -480,7 +485,6 @@ export const SECTIONS: Section[] = [
         format: "phone",
         help: "10 digits. Without this we cannot follow up, so push for it.",
         placeholder: "9876543210",
-        showIf: { questionId: "would_buy_precut", in: ["yes"] },
       },
       {
         id: "whatsapp",
@@ -489,7 +493,6 @@ export const SECTIONS: Section[] = [
         format: "phone",
         help: "Leave blank if it is the same as the phone number.",
         placeholder: "9876543210",
-        showIf: { questionId: "would_buy_precut", in: ["yes"] },
       },
     ],
   },

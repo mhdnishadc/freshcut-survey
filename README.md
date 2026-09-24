@@ -44,7 +44,8 @@ HTML and one inline SVG, so nothing heavy ships to a field phone.
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. **SQL Editor → New query**, paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql), Run.
-   That is the whole schema — there is only one migration, and it is safe to re-run.
+   Then do the same for [`0002_drop_location.sql`](supabase/migrations/0002_drop_location.sql),
+   which trims the schema down to the shortened questionnaire. Run them in order.
 3. **Authentication → Users → Add user** — create one account per team member
    (email + password, tick "Auto Confirm User"). There is no public sign-up: this
    app is for your team only.
